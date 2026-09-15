@@ -1,0 +1,49 @@
+name: Build KickForge (Windows)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:   # permite lanzarlo manualmente desde la pestaña Actions
+
+jobs:
+  build-windows:
+    name: Build VST3 (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC (Visual Studio)
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build (Release)
+        run: |
+          cmake --build build --config Release --target KickForge_VST3
+
+      - name: Locate VST3
+        id: find_vst3
+        shell: pwsh
+        run: |
+          $vst3 = Get-ChildItem -Path "build" -Recurse -Filter "KickForge.vst3" -Directory | Select-Object -First 1
+          if ($vst3) {
+            Write-Host "Found VST3 at: $($vst3.FullName)"
+            echo "vst3_path=$($vst3.FullName)" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Error "No se encontró el archivo KickForge.vst3"
+            Get-ChildItem -Path "build" -Recurse | Select-Object FullName
+            exit 1
+          }
+
+      - name: Upload VST3 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KickForge-Windows-VST3
+          path: ${{ steps.find_vst3.outputs.vst3_path }}
+          if-no-files-found: error
